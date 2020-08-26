@@ -160,6 +160,15 @@ body {
     border-radius: 5px;
 	overflow: hidden;
 }
+.schedule-week-time {
+
+}
+.schedule-week-time:before {
+    content: "[";
+}
+.schedule-week-time:after {
+    content: "]";
+}
 .day-type {
     padding: 10px;
     background: var(--theme-fg-color);
@@ -174,6 +183,9 @@ body {
     color: var(--theme-fg-color);
     font-size: 1em;*/
 }
+.day-name {
+
+}
 
 .schedule-day-type {
     font-weight: normal;
@@ -183,5 +195,38 @@ body {
 }
 .schedule-day-type:after {
     content: "]";
+}
+
+
+.md-multiline-code {
+    padding: 5px 10px;
+    background: #88888833;
+    border-radius: 5px;
+    font-family: monospace;
+}
+.md-paragraph {
+    padding: 5px;
+}
+.md-text {
+    
+}
+.md-link {
+    color: inherit;
+}
+.md-code {
+    padding: 5px 8px;
+    margin: 0px 7px;
+    background: #88888833;
+    border-radius: 5px;
+    font-family: monospace;
+}
+.md-bold {
+    font-weight: bold;
+}
+.md-italic {
+    font-style: italic;
+}
+.md-strikethrough {
+    text-decoration: line-through;
 }
 
