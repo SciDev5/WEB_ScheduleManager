@@ -89,10 +89,11 @@ function escapeHTML(text, replaceLineBreaks) {
 	return str;
 }
 function parseMD(markdown,parent) {
-	var escaped = escapeHTML(markdown,false);
-	var mdRegex = /^(?:\n|\r\n)(?:\n| |\r\n)*```((?:.|\r?\n)*?)```|^(.*?)($|\*\*|__|\*|_|~~|`(.*?)`|\[(.*?)\]\((.*?)\)| *(?:\n|\r\n)(?:\n| |\r\n)*)/;
-	
-	var currentStyle = {bold:false,italic:false,strikethrough:false};
+	var escaped = escapeHTML(markdown,false); window.test = escaped;
+	var mdRegex = /^(.*?)($|\*\*|__|\*|_|~~|`([^\n\r`]+?)`|\[(.*?)\]\((.*?)\)| *(?:\n|\r\n)(?:\n| |\r\n)*)/;
+	var multilineCodeRegex = /^```((?:.|\r?\n)+?)```/;
+
+	var currentStyle = {bold:false,italic:false,strikethrough:false}; var isLastNewline = true;
 	var elements = [{type:"paragraph",arr:[]}];
 	
 	var addText = text => elements[elements.length-1].arr.push({type:"text",text,style:{bold:currentStyle.bold,italic:currentStyle.italic,strikethrough:currentStyle.strikethrough}});
@@ -107,24 +108,34 @@ function parseMD(markdown,parent) {
 
 	while (escaped.length > 0) {
 		var exec = mdRegex.exec(escaped);
+		var mlcexec = multilineCodeRegex.exec(escaped);
 
-		if (exec[2] && exec[2].length > 0) addText(exec[2]);
+		if (mlcexec != null && isLastNewline) {
+			addMultilineCode(mlcexec[1]);
+			isLastNewline = true;
+			escaped = escaped.substr(mlcexec[0].length);
+			continue;
+		}
+		
+		isLastNewline = false;
 
-		if (exec[1]) { // multiline-code
-			addMultilineCode(exec[1]);
-		} else if (exec[4]) { // inline-code
-			addCode(exec[4]);
-		} else if (exec[5] && exec[6]) { // link
-			addLink(exec[5],exec[6]);
-		} else if (exec[3]) { // operation
-			if (/^ *\r?\n *$/.test(exec[3])) {
+		if (exec[1] && exec[1].length > 0) addText(exec[1]);
+
+		if (exec[3]) { // inline-code
+			addCode(exec[3]);
+		} else if (exec[4] && exec[5]) { // link
+			addLink(exec[4],exec[5]);
+		} else if (exec[2]) { // operation
+			if (/^ *\r?\n *$/.test(exec[2])) {
 				addText(" ");
 				currentStyle = {bold:false,italic:false,strikethrough:false};
-			} else if (/^ *(\r?\n *){2}/.test(exec[3])) {
+				isLastNewline = true;
+			} else if (/^ *(\r?\n *){2}/.test(exec[2])) {
 				currentStyle = {bold:false,italic:false,strikethrough:false};
 				addBlock();
+				isLastNewline = true;
 			} else {
-				switch (exec[3]) {
+				switch (exec[2]) {
 				case "*":
 				case "_":
 					currentStyle.italic = !currentStyle.italic;
@@ -138,8 +149,6 @@ function parseMD(markdown,parent) {
 					break;
 				}
 			}
-		} else { // text end
-			// already handled.
 		}
 
 		escaped = escaped.substr(exec[0].length);
@@ -149,7 +158,7 @@ function parseMD(markdown,parent) {
 	for (var block of elements) {
 		switch (block.type) {
 		case "multiline-code":
-			createElement(htmlElt,"div","md-multiline-code",block.text.replace(/\r?\n/g,"<br>"));
+			createElement(htmlElt,"div","md-multiline-code",block.text.replace(/^(?: *\r?\n)*((?:.*\r?\n)*?.*?)(?: *\r?\n *)*$/,"$1"));
 			break;
 		case "paragraph":
 			var paragraph = createElement(htmlElt,"div","md-paragraph");
@@ -188,6 +197,15 @@ function createTextElement(parent,content) {
 		parent.appendChild(elt);
 	return elt;
 }
+function createSelectElement(parent,className,options) {
+	var elt = document.createElement("select");
+	for (option of options)
+		createElement(elt,"option","",option).value = option;
+	elt.className = className;
+	if (parent)
+		parent.appendChild(elt);
+	return elt;
+}
 
 function getDataByDay(i) { // i is refrencing dayTypeOrder
 	var dayType = scheduleData.dayTypes[scheduleData.dayTypeOrder[i%scheduleData.dayTypeOrder.length]];
@@ -198,17 +216,17 @@ function getDataByDay(i) { // i is refrencing dayTypeOrder
 function createDaySchedule(dayData) {
 	var {dayType,blocks} = dayData;
 	
-	var container = createElement(null,"div","schedule-day");
-	var label = createElement(container,"div","label "+dayType.color,"Day ");
-	createElement(label,"span","schedule-day-type",dayType.name);
+	var container = createElement(null,"div","style-group");
+	var label = createElement(container,"div","style-label "+dayType.color,"Day ");
+	createElement(label,"span","style-info",dayType.name);
 
 	for (var i = 0; i < dayType.blocks.length; i++) {
 		var blockI = dayType.blocks[i];
 		var block = blocks[blockI];
-		var blockElt = createElement(container,"div","block-summary "+block.color);
-		createElement(blockElt,"span","summary-time",timeString(dayType.blockTimes[i]));
+		var blockElt = createElement(container,"div","style-row "+block.color);
+		createElement(blockElt,"span","style-info",timeString(dayType.blockTimes[i]));
 		createTextElement(blockElt," ");
-		createElement(blockElt,"span","summary-name",block.name);
+		createElement(blockElt,"span","",block.name);
 	}
 
 	return container;
@@ -217,16 +235,16 @@ function createDaySchedule(dayData) {
 function createWeekSchedule(weekData) {
 	var {dayTypes,dateStart,dateRangeStr} = weekData;
 	
-	var container = createElement(null,"div","week");
-	var label = createElement(container,"div","label","Week ");
-	createElement(label,"span","schedule-week-time",dateRangeStr);
+	var container = createElement(null,"div","style-group");
+	var label = createElement(container,"div","style-label","Week ");
+	createElement(label,"span","style-info",dateRangeStr);
 
 	for (var i = 0; i < dayTypes.length; i++) {
 		var day = dayTypes[i];
-		var dayElt = createElement(container,"div","day-type "+day.color);
-		createElement(dayElt,"span","weekday",(["Su","M","Tu","W","Th","F","Sa"])[(i+today(dateStart).getDay())%7]);
+		var dayElt = createElement(container,"div","style-row "+day.color);
+		createElement(dayElt,"span","style-info",(["Su","M","Tu","W","Th","F","Sa"])[(i+today(dateStart).getDay())%7]);
 		createTextElement(dayElt," ");
-		createElement(dayElt,"span","day-name",day.name);
+		createElement(dayElt,"span","",day.name);
 	}
 
 	return container;
@@ -241,32 +259,260 @@ function createSoon(soonData) {
 	}
 	now = now || {name: "Nothing Scheduled", color: "grey", info: "Enjoy your free time!"}
 
-	var container = createElement(null,"div","soon");
-	var label = createElement(container,"div","label","Scheduled Soon");
+	var container = createElement(null,"div","style-group");
+	var label = createElement(container,"div","style-label","Scheduled Soon");
 
-	var currentBlock = createElement(container,"div","current-block "+now.color);
-	createElement(currentBlock,"div","type","Now");
-	createTextElement(currentBlock," ");
-	createElement(currentBlock,"div","block-name",now.name);
+	var currentBlock = createElement(container,"div","style-row-solid style-large "+now.color);
+	var title = createElement(currentBlock,"div","style-title");
+	createElement(title,"span","style-info","Now");
+	createTextElement(title," "+now.name);
 	if (now.info && now.info.length > 0)
-		parseMD(now.info, createElement(currentBlock,"div","block-info"));
+		parseMD(now.info, createElement(currentBlock,"div","style-subsection"));
 
 	if (next) {
-		var nextBlock = createElement(container,"div","next-block "+next.color);
-		createElement(nextBlock,"div","type","Next");
-		createTextElement(nextBlock," ");
-		createElement(nextBlock,"div","block-name",next.name);
-		if (next.info && next.info.length > 0)
-			parseMD(next.info, createElement(nextBlock,"div","block-info"));
+		var nextBlock = createElement(container,"div","style-row-solid "+next.color);
+		var title = createElement(nextBlock,"div","style-title");
+		createElement(title,"span","style-info","Next");
+		createTextElement(title," "+next.name);
 		if (isFinite(nextTime) && nextTime >= 0 && nowDate) {
 			var minutesLeft = nextTime-Math.floor((nowDate-today(nowDate))/60000);
-			createElement(nextBlock,"div","block-time",timeString(nextTime) + " (in "+(minutesLeft < 1 ? "< 1" : minutesLeft)+" minute"+(minutesLeft < 2 ? "" : "s")+")");
+			createElement(nextBlock,"div","style-info",timeString(nextTime) + " (in "+(minutesLeft < 1 ? "< 1" : minutesLeft)+" minute"+(minutesLeft < 2 ? "" : "s")+")");
 		}
+		if (next.info && next.info.length > 0)
+			parseMD(next.info, createElement(nextBlock,"div","style-subsection"));
 	}
 
 	return container;
 }
 
-document.body.appendChild(createSoon({now:scheduleData.blocks[0],nowDate:new Date()}));
+function createEditBlock(id, presets, changeListener, cancelListener) {
+	var values = presets || {name:"",color:"red",info:"Block info / links. (Supports [markdown](https://en.wikipedia.org/wiki/Markdown#Example))"}
+
+	var container = createElement(null,"div","style-group "+values.color);
+	var label = createElement(container,"div","style-label","Edit Block ");
+	createElement(label,"span","style-info","id #"+id);
+
+	var basicSettings = createElement(container,"div","style-row");
+	var nameIn = createElement(basicSettings,"input","style-input"); nameIn.placeholder = "Block Name"; nameIn.value = values.name;
+	var selectIn = createSelectElement(basicSettings,"style-input",["red","orange","yellow","green","cyan","blue","purple","pink","brown","grey"]);
+	var saveButton = createElement(basicSettings,"button","style-input style-button-disabled","save");
+	var cancelButton = createElement(basicSettings,"button","style-input","cancel");
+
+	var infoIn = createElement(container,"textarea","style-row",values.info);
+	var infoMDContainer = createElement(container,"div","style-row");
+	parseMD(infoIn.value, infoMDContainer);
+	
+	infoIn.addEventListener("keydown",() => setTimeout(()=>{
+		infoMDContainer.innerHTML = "";
+		parseMD(infoIn.value, infoMDContainer);
+		values.info = infoIn.value;
+	}));
+	selectIn.addEventListener("change",() => {
+		container.className = "style-group "+selectIn.value;
+		values.color = selectIn.value;
+	});
+	nameIn.addEventListener("keydown",() => setTimeout(()=>{
+		saveButton.classList.remove("style-button-disabled");
+		if (nameIn.value.length == 0)
+			saveButton.classList.add("style-button-disabled");
+		values.name = nameIn.value;
+	}));
+	
+	saveButton.addEventListener("click",() => {
+		values.color = selectIn.value;
+		values.info = infoIn.value;
+		values.name = nameIn.value;
+		if (values.name.length > 0)
+			changeListener(id, values);
+	});
+	cancelButton.addEventListener("click",() => {
+		cancelListener(id);
+	});
+
+	return container;
+}
+
+function createEditDay(id, presets, changeListener, cancelListener) {
+	var values = presets || {name:"",color:"red",blocks:[0,1],blockTimes:[600,660]}
+
+	var container = createElement(null,"div","style-group "+values.color);
+	var label = createElement(container,"div","style-label","Edit Day ");
+	createElement(label,"span","style-info","id #"+id);
+
+	var basicSettings = createElement(container,"div","style-row");
+	var nameIn = createElement(basicSettings,"input","style-input"); nameIn.placeholder = "Block Name"; nameIn.value = values.name;
+	var selectIn = createSelectElement(basicSettings,"style-input",["red","orange","yellow","green","cyan","blue","purple","pink","brown","grey"]);
+	var saveButton = createElement(basicSettings,"button","style-input style-button-disabled","save");
+	var cancelButton = createElement(basicSettings,"button","style-input","cancel");
+	var saveButtonError = createElement(basicSettings,"div","style-inline-textblock red","Error: ");
+	var saveButtonErrorText = createElement(saveButtonError,"span","","Day name required!");
+	
+	var blocksContainer = createElement(container,"div","style-row");
+	createElement(blocksContainer,"div","style-label","Blocks");
+	var addBlockButton = createElement(blocksContainer,"button","style-row style-input","Add Block");
+
+	var invalidityReason = "";
+	var valid = () => {
+		var invalidate = reason => {
+			invalidityReason = reason;
+		}
+		
+		if (nameIn.value.length == 0) {
+			invalidate("Day name required!");
+			return false;
+		}
+
+		var time = -1;
+		for (var data of blockDatas) {
+			if (!scheduleData.blocks[parseInt(data.id)]) { invalidate("A block's id is invalid!"); return false; }
+			var hour = parseInt(data.timeHour), minute = parseInt(data.timeMinute), half = ["AM","PM"].indexOf(data.timeHalf);
+			if (isNaN(hour) || hour < 1 || hour > 12) { invalidate("A blocks time is invalid!"); return false; }
+			if (isNaN(minute) || minute < 0 || minute >= 60) invalidate("A blocks time is invalid!");
+			if (half == -1) { invalidate("A blocks time is invalid!"); return false; }
+			var currentTime = 60*(parseInt(data.timeHour)%12+(data.timeHalf=="PM"?12:0))+parseInt(data.timeMinute)||0;
+			if (currentTime <= time) { invalidate("Blocks must come after each other!"); return false; }
+			console.log(time, currentTime);
+			time = currentTime;
+		}
+
+		return true;
+	}
+	var updateSaveButton = () => {
+		saveButton.classList.remove("style-button-disabled");
+		if (!valid()) {
+			saveButtonError.style.display = "inline-block";
+			saveButtonErrorText.innerText = invalidityReason;
+			saveButton.classList.add("style-button-disabled");
+		} else {
+			saveButtonError.style.display = "none";
+		}
+	}
+	var blockDatas = [];
+	var addBlock = (blockValues) => {
+		var row = createElement(null,"div","style-row");
+		var timeHourIn = createElement(row,"input","style-input style-info style-smallwidth"); timeHourIn.type = "number"; timeHourIn.value = Math.floor(blockValues.time/60+11)%12+1;
+		var timeMinuteIn = createElement(row,"input","style-input style-info style-smallwidth"); timeMinuteIn.type = "number"; timeMinuteIn.value = blockValues.time%60;
+		var timeHalfIn = createSelectElement(row,"style-input style-info",["AM","PM"]); timeHalfIn.value = blockValues.time>=60*12?"PM":"AM";
+		var idIn = createElement(row,"input","style-input"); idIn.type = "number"; idIn.min = 0; idIn.value = blockValues.id;
+
+		var removeBlockButton = createElement(row,"button","style-input","Remove");
+
+		var blockData = scheduleData.blocks[blockValues.id];
+		var nameOut = createElement(row,"span","style-inline-textblock "+blockData.color); nameOut.innerText = blockData.name;
+
+		blocksContainer.insertBefore(row,addBlockButton);
+		
+		var data = {timeHour: timeHourIn.value, timeMinute: timeMinuteIn.value, timeHalf: timeHalfIn.value, id: idIn.value};
+		blockDatas.push(data);
+
+		idIn.addEventListener("keydown",() => setTimeout(()=>{
+			var id = parseInt(idIn.value);
+			if (isNaN(id) || !scheduleData.blocks[id]) {
+				nameOut.className = "style-inline-textblock red";
+				nameOut.innerText = "invalid";
+			} else {
+				var blockData = scheduleData.blocks[id];
+				nameOut.className = "style-inline-textblock "+blockData.color;
+				nameOut.innerText = blockData.name;
+			}
+		}));
+		idIn.addEventListener("change",() => {
+			var id = parseInt(idIn.value);
+			if (isNaN(id) || !scheduleData.blocks[id]) {
+				idIn.value = data.id;
+				var blockData = scheduleData.blocks[parseInt(data.id)];
+				if (blockData) {
+					nameOut.className = "style-inline-textblock "+blockData.color;
+					nameOut.innerText = blockData.name;
+				} else {
+					nameOut.className = "style-inline-textblock red";
+					nameOut.innerText = "invalid";
+				}
+			} else {
+				var blockData = scheduleData.blocks[id];
+				nameOut.className = "style-inline-textblock "+blockData.color;
+				nameOut.innerText = blockData.name;
+				data.id = idIn.value;
+				updateSaveButton();
+			}
+		});
+		timeHourIn.addEventListener("change",() => {
+			var hour = parseInt(timeHourIn.value);
+			if (isNaN(hour) || hour <= 0 || hour > 12) {
+				timeHourIn.value = data.timeHour;
+			} else {
+				data.timeHour = timeHourIn.value;
+				updateSaveButton();
+			}
+		});
+		timeMinuteIn.addEventListener("change",() => {
+			var minute = parseInt(timeMinuteIn.value);
+			if (isNaN(minute) || minute < 0 || minute >= 60) {
+				timeMinuteIn.value = data.timeMinute;
+			} else {
+				data.timeMinute = timeMinuteIn.value;
+				updateSaveButton();
+			}
+		});
+		timeHalfIn.addEventListener("change",() => {
+			if (!["AM","PM"].includes(timeHalfIn.value)) {
+				timeHalfIn.value = data.timeHalf;
+			} else {
+				data.timeHalf = timeHalfIn.value;
+				updateSaveButton();
+			}
+		});
+
+		removeBlockButton.addEventListener("click",() => {
+			blockDatas.splice(blockDatas.indexOf(data),1);
+			row.remove();
+			updateSaveButton();
+		});
+		
+	}
+
+	for (var i = 0; i < values.blocks.length; i++) {
+		addBlock({id:values.blocks[i],time:values.blockTimes[i]});
+	}
+
+	addBlockButton.addEventListener("click",() => {
+		addBlock({id:0,time:blockDatas[blockDatas.length-1].time + 1});
+		updateSaveButton();
+	});
+	selectIn.addEventListener("change",() => {
+		container.className = "style-group "+selectIn.value;
+		values.color = selectIn.value;
+		updateSaveButton();
+	});
+	nameIn.addEventListener("keydown",() => setTimeout(()=>{
+		values.name = nameIn.value;
+		updateSaveButton();
+	}));
+	
+	saveButton.addEventListener("click",() => {
+		values.color = selectIn.value;
+		values.name = nameIn.value;
+		values.blocks = [];
+		values.blockTimes = [];
+		for (var data of blockDatas) {
+			values.blocks.push(parseInt(data.id));
+			values.blockTimes.push(60*(parseInt(data.timeHour)%12+(data.timeHalf=="PM"?12:0))+parseInt(data.timeMinute)||0);
+		}
+
+		if (valid())
+			changeListener(id, values);
+	});
+	cancelButton.addEventListener("click",() => {
+		cancelListener(id);
+	});
+
+	return container;
+}
+
+
+document.body.appendChild(createSoon({now:scheduleData.blocks[0],next:scheduleData.blocks[1],nextTime:1000,nowDate:new Date()}));
 document.body.appendChild(createWeekSchedule({dayTypes:[scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1]],dateStart:new Date(),dateRangeStr:"Yeet-yeet2"}))
 document.body.appendChild(createDaySchedule({dayType:getDataByDay(3),blocks:scheduleData.blocks}));
+
+document.body.appendChild(createEditBlock(2,null,console.log,console.warn));
+document.body.appendChild(createEditDay(2,null,console.log,console.warn));
