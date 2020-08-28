@@ -6,6 +6,8 @@ body {
 	background: var(--theme-anticolor-basic);
 	font-family: "ubuntu";
 
+    min-width: 500px;
+
 	--theme-anticolor-accent: #e0e0e0;
 	--theme-anticolor-basic: #f7f7f7;
 
@@ -48,7 +50,6 @@ body {
 .cyan   { --theme-sel-color: var(--theme-color-cyan);   --theme-sel-anticolor: var(--theme-anticolor-cyan);   }
 .grey   { --theme-sel-color: var(--theme-color-grey);   --theme-sel-anticolor: var(--theme-anticolor-grey);   }
 
-
 /* style classes */
 
 .style-group {
@@ -57,7 +58,7 @@ body {
 }
 
 .style-label {
-    padding: 10px;
+    padding: 10px 25px 10px 40px;
     color: var(--theme-sel-color);
     background: var(--theme-sel-anticolor);
     font-weight: bold;
@@ -77,7 +78,7 @@ body {
     background: var(--theme-sel-color);
     height: -webkit-fill-available;
     display: block;
-    clip-path: polygon(20px 0%, 43px 0%, 20px 23px, 20px 100%, 0% 100%, 0% 20px);
+    clip-path: polygon(20px 0%, 43px 0%, 20px 23px, 20px 101%, 0% 101%, 0% 20px)
 }
 
 .style-row {
@@ -192,6 +193,26 @@ textarea.style-row {
 .style-inline {
     display: inline-block;
 }
+.style-centered {
+    text-align: center;
+}
+
+#gui-container .style-group {
+    margin-bottom: 30px;
+}
+
+#main-container {
+    width: 600px;
+    margin: 30px calc(50% - 300px);
+}
+
+@media only screen and (max-width: 650px) {
+
+    #main-container {
+        margin: 30px 25px;
+        width: calc(100% - 50px);
+    }
+}
 
 /* markdown classes */
 
@@ -227,4 +248,24 @@ textarea.style-row {
 }
 .md-strikethrough {
     text-decoration: line-through;
+}
+
+/* custom prompt screen */
+
+#customprompt-background {
+    position: fixed;
+    left: 0px;
+    z-index: 10;
+    right: 0px;
+    top: 0px;
+    bottom: 0px;
+    background: #000000;
+    opacity: 0.5;
+}
+#customprompt {
+    position: fixed;
+    z-index: 10;
+    left: calc(50% - 150px);
+    right: calc(50% - 150px);
+    top: 100px;
 }

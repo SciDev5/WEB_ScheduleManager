@@ -8,37 +8,19 @@
     <script src="/main.js" defer></script>
 </head>
     <body>
-        <!--div class="style-group">
-            <div class="style-label">
-                Edit Day (id #0)
+        <div id="main-container">
+            <div class="style-centered"><button class="style-input" id="button-show">Show Schedule</button><button class="style-input" id="button-edit">Edit Schedule</button></div>
+            <p class="style-info style-centered">Press one of the buttons above to get more information.</p>
+            <div id="gui-container"></div>
+        </div>
+
+        <span id="customprompt-visibility" style="display:none">
+            <div id="customprompt-background"></div>
+            <div id="customprompt" class="style-group">
+                <div id="customprompt-question" class="style-label">question here</div>
+                <div id="customprompt-input-container" class="style-row">response medium here</div>
+                <div class="style-row"><button id="customprompt-submit" class="style-input">Submit</button><button id="customprompt-cancel" class="style-input">Cancel</button></div>
             </div>
-            <div class="style-row">
-                <input class="name style-input" placeholder="block name">
-                <select class="color style-input">
-                    <option value="red">red</option>
-                    <option value="orange">orange</option>
-                    <option value="yellow">yellow</option>
-                    <option value="green">green</option>
-                    <option value="cyan">cyan</option>
-                    <option value="blue">blue</option>
-                    <option value="purple">purple</option>
-                    <option value="pink">pink</option>
-                    <option value="brown">brown</option>
-                    <option value="grey">grey</option>
-                </select>
-            </div>
-            <div class="style-row">
-                <div class="style-label">
-                    Blocks
-                </div>
-                <div class="style-row">
-                    <input class="style-info style-input" placeholder="time"> <input class="style-input" placeholder="block id"> <button class="style-input">Remove</button>
-                </div>
-                <div class="style-row">
-                    <input class="style-info style-input" placeholder="time"> <input class="style-input" placeholder="block id"> <button class="style-input">Remove</button>
-                </div>
-                <button class="style-row style-input">Add</button>
-            </div>
-        </div-->
+        <span>
     </body>
 </html>

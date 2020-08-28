@@ -60,6 +60,69 @@ function defaultScheduleData() {
 }
 load();
 
+// Custom prompt
+
+var prompted = false, promptData = {elt:null,submit:()=>{},cancel:()=>{}};
+
+async function promptInputElt(question, elt) {
+	if (prompted) return null;
+
+	document.getElementById("customprompt-question").innerText = question;
+	document.getElementById("customprompt-visibility").style.display = "";
+	var inputContainer = document.getElementById("customprompt-input-container")
+	inputContainer.innerHTML = ""; inputContainer.appendChild(elt);
+	prompted = true;
+
+	promptData.elt = elt;
+
+	var type = await Promise.any([
+		new Promise(res => {
+			promptData.submit = () => res("submit");
+		}),
+		new Promise(res => {
+			promptData.cancel = () => res("cancel");
+		})
+	]);
+
+	if (type == "cancel") {
+		clearPrompt();
+		return null;
+	} else if (type == "submit") {
+		clearPrompt();
+		return getPromptData();
+	}
+}
+
+async function promptSelect(question,options) {
+	var selectElt = createSelectElement(null,"select-input",options);
+	return await promptInputElt(question,selectElt); 
+}
+async function promptInput(question,placeholder) {
+	var inputElt = createElement(null,"select-input",options);
+	inputElt.placeholder = placeholder;
+	return await promptInputElt(question,inputElt); 
+}
+
+function clearPrompt() {
+	prompted = false;
+	if (promptData.elt) promptData.elt.remove();
+	document.getElementById("customprompt-visibility").style.display = "none";
+}
+
+function getPromptData() {
+	if (promptData.elt) 
+		return promptData.elt.value;
+	else
+		throw new Error("no prompt input element found!");
+}
+
+// Setup prompt;
+
+document.getElementById("customprompt-submit").addEventListener("click",()=>promptData.submit());
+document.getElementById("customprompt-cancel").addEventListener("click",()=>promptData.cancel());
+
+// utils
+
 function getWeekendDayType() {
 	return {
 		name: "Weekend",
@@ -215,18 +278,76 @@ function createTextElement(parent,content) {
 function createSelectElement(parent,className,options) {
 	var elt = document.createElement("select");
 	for (option of options)
-		createElement(elt,"option","",option).value = option;
+		if (typeof option == "object" && option && option.text != undefined && option.value != undefined)
+			createElement(elt,"option","",option.text).value = option.value;
+		else if (option)
+			createElement(elt,"option","",option).value = option;
 	elt.className = className;
 	if (parent)
 		parent.appendChild(elt);
 	return elt;
 }
 
-function getDataByDay(i, j) { // i is refrencing dayTypeOrder, j is week
-	var dayType = scheduleData.dayTypes[scheduleData.dayTypeOrder[scheduleData.weekTypes[j]][i%scheduleData.dayTypeOrder.length]];
-	return dayType;
+function dateFromArray(arr) {
+	return new Date(arr[0],arr[1],arr[2]);
 }
 
+function getWeek(i) {
+	return Math.floor((i+dateFromArray(scheduleData.startDay).getDay())/7);
+}
+
+function getDataByDay(i_) { // i_ is days since start
+	if (i_ < 0) return getHolidayDayType({name:"Summer Vacation", color: "grey"});
+
+	var j_ = getWeek(i_);
+	var j = j_ %scheduleData.weekTypes.length; // week num
+	var ks = dateFromArray(scheduleData.startDay).getDay();
+	var k = (i_+dateFromArray(scheduleData.startDay).getDay())%7; // weekday
+	var i = 0;
+	
+	for (var l = ks+1; l < 7; l++) 
+		if (scheduleData.weekDays[l]) i++;
+	var perWeek = 0; for (var day of scheduleData.weekDays) if (day) perWeek++;
+	i += perWeek * (j_-1);
+	for (var l = 0; l <= k; l++)
+		if (scheduleData.weekDays[l]) i++;
+	
+	var holidayDays = []; 
+	for (var holiday of scheduleData.holidays) {
+		var days = Math.round((dateFromArray(holiday.start) - dateFromArray(scheduleData.startDay))/(24*60*60*1000) - i_);
+		for (var d = 0; d <= -days && d < holiday.length; d++) {
+			var day = today(new Date(dateFromArray(holiday.start).getTime() + d*(24*60*60*1000) + 12*60*60*1000));
+			if (day < dateFromArray(scheduleData.startDay)) continue;
+			if (scheduleData.weekDays[day.getDay()] && !holidayDays.includes(day.getTime()))
+				holidayDays.push(day.getTime());
+		}
+		if (days <= 0 && -days < holiday.length)
+			return getHolidayDayType(holiday);
+	}
+
+	i -= holidayDays.length;
+
+
+	if (scheduleData.weekDays[k])
+		return scheduleData.dayTypes[scheduleData.dayTypeOrder[scheduleData.weekTypes[j]][i%scheduleData.dayTypeOrder[scheduleData.weekTypes[j]].length]];
+	else 
+		return getWeekendDayType();
+}
+function getSoonInfo() {
+	var now = new Date(), nowDate = today(now), nowDayTime = now.getMinutes()+now.getHours()*60;
+
+	var dayType = getDataByDay(daysBetween(nowDate,dateFromArray(scheduleData.startDay)));
+	
+
+	for (var i = 0; i < dayType.blocks.length; i++)
+		if (nowDayTime >= dayType.blockTimes[i] && nowDayTime < dayType.blockTimes[i+1]) break;
+
+	var nowBlock = scheduleData.blocks[dayType.blocks[i]];
+	var nextBlock = scheduleData.blocks[dayType.blocks[i+1]];
+	var nextBlockTime = dayType.blockTimes[i+1];
+
+	return {now:nowBlock,next:nextBlock,nextTime:nextBlockTime,nowDate:now,dayName:dayType.name};
+}
 
 function createDaySchedule(dayData) {
 	var {dayType,blocks} = dayData;
@@ -251,13 +372,13 @@ function createWeekSchedule(weekData) {
 	var {dayTypes,dateStart,dateRangeStr} = weekData;
 	
 	var container = createElement(null,"div","style-group");
-	var label = createElement(container,"div","style-label","Week ");
+	var label = createElement(container,"div","style-label","Upcoming Days ");
 	createElement(label,"span","style-info",dateRangeStr);
 
 	for (var i = 0; i < dayTypes.length; i++) {
-		var day = dayTypes[i];
+		var day = dayTypes[i] || {name:"!!invalid day!!",color:"grey"};
 		var dayElt = createElement(container,"div","style-row "+day.color);
-		createElement(dayElt,"span","style-info",(["Su","M","Tu","W","Th","F","Sa"])[(i+today(dateStart).getDay())%7]);
+		createElement(dayElt,"span","style-info",i==0?"Today":Math.abs(i)>=7?today(new Date(24*60*60*1000*(i+0.5)+today(dateStart).getTime())).toLocaleDateString():(["Su","M","Tu","W","Th","F","Sa"])[(7+i+today(dateStart).getDay())%7]);
 		createTextElement(dayElt," ");
 		createElement(dayElt,"span","",day.name);
 	}
@@ -266,16 +387,16 @@ function createWeekSchedule(weekData) {
 }
 
 function createSoon(soonData) {
-	var {now,next,nowDate,nextTime} = soonData;
+	var {now,next,nowDate,nextTime,dayName} = soonData;
 
 	if (!next && now) {
 		next = {name: "Nothing Scheduled", color: "grey", info: "Free time awaits!"};
-		nextTime = -1;
 	}
 	now = now || {name: "Nothing Scheduled", color: "grey", info: "Enjoy your free time!"}
 
 	var container = createElement(null,"div","style-group");
-	var label = createElement(container,"div","style-label","Scheduled Soon");
+	var label = createElement(container,"div","style-label","Scheduled Soon ");dayName
+	createElement(label,"span","style-info",dayName);
 
 	var currentBlock = createElement(container,"div","style-row-solid style-large "+now.color);
 	var title = createElement(currentBlock,"div","style-title");
@@ -309,8 +430,8 @@ function createEditBlock(id, presets, changeListener, cancelListener) {
 
 	var basicSettings = createElement(container,"div","style-row");
 	var nameIn = createElement(basicSettings,"input","style-input"); nameIn.placeholder = "Block Name"; nameIn.value = values.name;
-	var selectIn = createSelectElement(basicSettings,"style-input",["red","orange","yellow","green","cyan","blue","purple","pink","brown","grey"]);
-	var saveButton = createElement(basicSettings,"button","style-input style-button-disabled","save");
+	var selectIn = createSelectElement(basicSettings,"style-input",["red","orange","yellow","green","cyan","blue","purple","pink","brown","grey"]); selectIn.value = values.color;
+	var saveButton = createElement(basicSettings,"button","style-input"+(values.name.length > 0?"":" style-button-disabled"),"save");
 	var cancelButton = createElement(basicSettings,"button","style-input","cancel");
 
 	var infoIn = createElement(container,"textarea","style-row",values.info);
@@ -356,7 +477,7 @@ function createEditDay(id, presets, changeListener, cancelListener) {
 
 	var basicSettings = createElement(container,"div","style-row");
 	var nameIn = createElement(basicSettings,"input","style-input"); nameIn.placeholder = "Block Name"; nameIn.value = values.name;
-	var selectIn = createSelectElement(basicSettings,"style-input",["red","orange","yellow","green","cyan","blue","purple","pink","brown","grey"]);
+	var selectIn = createSelectElement(basicSettings,"style-input",["red","orange","yellow","green","cyan","blue","purple","pink","brown","grey"]); selectIn.value = values.color;
 	var saveButton = createElement(basicSettings,"button","style-input style-button-disabled","save");
 	var cancelButton = createElement(basicSettings,"button","style-input","cancel");
 	var saveButtonError = createElement(basicSettings,"div","style-inline-textblock red","Error: ");
@@ -386,7 +507,6 @@ function createEditDay(id, presets, changeListener, cancelListener) {
 			if (half == -1) { invalidate("A blocks time is invalid!"); return false; }
 			var currentTime = 60*(parseInt(data.timeHour)%12+(data.timeHalf=="PM"?12:0))+parseInt(data.timeMinute)||0;
 			if (currentTime <= time) { invalidate("Blocks must come after each other!"); return false; }
-			console.log(time, currentTime);
 			time = currentTime;
 		}
 
@@ -702,11 +822,121 @@ function createEditSchedule(leaveEvent) {
 	return container;
 }
 
+// Setup HTML page
+
+var showScheduleButton = document.getElementById("button-show");
+var editScheduleButton = document.getElementById("button-edit");
+var thingContainer = document.getElementById("gui-container");
+var screen = -1;
+
+var daysLen = 10;
+
+showScheduleButton.addEventListener("click", () => {
+	screen = 0;
+
+	load();
+
+	var nowDate = today(new Date());
+
+	thingContainer.innerHTML = "";
+	thingContainer.appendChild(createSoon(getSoonInfo()));
+	thingContainer.appendChild(createDaySchedule({dayType:getDataByDay(daysBetween(nowDate,dateFromArray(scheduleData.startDay))),blocks:scheduleData.blocks}));
+	
+	var weekDays = [], offset = -1, dateStart = new Date(today(new Date()).getTime() - offset*24*60*60*1000), dateEnd = new Date(dateStart.getTime() + daysLen*24*60*60*1000);
+	for (var i = offset; i < daysLen+offset; i++) 
+		weekDays.push(getDataByDay(i+daysBetween(dateStart,dateFromArray(scheduleData.startDay))));
+	thingContainer.appendChild(createWeekSchedule({dayTypes:weekDays,dateStart,dateRangeStr:(new Date(dateStart.getTime() + 12*60*60*1000).toLocaleDateString())+" - "+(new Date(dateEnd.getTime() + 12*60*60*1000).toLocaleDateString())}));
+	createElement(thingContainer,"button","style-input style-row","Show more days").addEventListener("click",()=>{daysLen += 10; rebuild()});
+});
+
+editScheduleButton.addEventListener("click", async () => {
+	if (screen == 1) return;
+
+	load();
+
+	var editType = await promptSelect("What would you like to change?",[{text:"Holidays + Day order",value:"schedule"},{text:"Day Info / Schedule",value:"day"},{text:"Block Info",value:"block"}])
+	if (editType == null) return;
+
+	var leave = () => { screen = -1; load(); rebuild(); }
+
+	var gui = null;
+	switch (editType) {
+	case "schedule":
+		gui = createEditSchedule(leave);
+		break;
+	case "day":
+		var arr = [{text:"Create new",value:scheduleData.dayTypes.length}];
+		for (var i = 0; i < scheduleData.dayTypes.length; i++) arr.push({text:scheduleData.dayTypes[i].name+" (id #"+i+")",value:i});
+		var dayN = await promptSelect("Which day would you like to edit?",arr);
+		if (dayN == null || isNaN(parseInt(dayN)) || parseInt(dayN) < 0 || parseInt(dayN) > scheduleData.dayTypes.length) return;
+		dayN = parseInt(dayN);
+
+		gui = createEditDay(dayN,scheduleData.dayTypes[dayN],(id, values) => {
+			scheduleData.dayTypes[id] = values;
+			save();
+			leave();
+		}, leave);
+		break;
+	case "block":
+		var arr = [{text:"Create new",value:scheduleData.blocks.length}];
+		for (var i = 0; i < scheduleData.blocks.length; i++) arr.push({text:scheduleData.blocks[i].name+" (id #"+i+")",value:i});
+		var dayN = await promptSelect("Which block would you like to edit?",arr);
+		if (dayN == null || isNaN(parseInt(dayN)) || parseInt(dayN) < 0 || parseInt(dayN) > scheduleData.blocks.length) return;
+		dayN = parseInt(dayN);
+
+		gui = createEditBlock(dayN,scheduleData.blocks[dayN],(id, values) => {
+			scheduleData.blocks[id] = values;
+			save();
+			leave();
+		}, leave);
+		break;
+	default: return;
+	}
+
+	screen = 1;
+
+	thingContainer.innerHTML = "";
+	thingContainer.appendChild(gui);
+});
+
+
+var rebuildTimeout = -1;
+var rebuild = () => {
+	clearTimeout(rebuildTimeout); // prevent two rebuild loops happening at the same time.
+
+	switch (screen) {
+	case -1:
+		thingContainer.innerHTML = "";
+		thingContainer.appendChild(createSoon(getSoonInfo()));
+		break;
+
+	case 0:	
+		var nowDate = today(new Date());
+		thingContainer.innerHTML = "";
+		thingContainer.appendChild(createSoon(getSoonInfo()));
+		thingContainer.appendChild(createDaySchedule({dayType:getDataByDay(daysBetween(nowDate,dateFromArray(scheduleData.startDay))),blocks:scheduleData.blocks}));
+
+		var weekDays = [], offset = -1, dateStart = new Date(today(new Date()).getTime() - offset*24*60*60*1000), dateEnd = new Date(dateStart.getTime() + daysLen*24*60*60*1000);
+		for (var i = offset; i < daysLen+offset; i++) 
+			weekDays.push(getDataByDay(i+daysBetween(dateStart,dateFromArray(scheduleData.startDay))));
+		thingContainer.appendChild(createWeekSchedule({dayTypes:weekDays,dateStart,dateRangeStr:(new Date(dateStart.getTime() + 12*60*60*1000).toLocaleDateString())+" - "+(new Date(dateEnd.getTime() + 12*60*60*1000).toLocaleDateString())}));
+		createElement(thingContainer,"button","style-input style-row","Show more days").addEventListener("click",()=>{daysLen += 10; rebuild()});
+		break;
+	}
+
+	var now = new Date();
+	var next = new Date(now.getFullYear(),now.getMonth(),now.getDate(),now.getHours(),now.getMinutes()+1);
+	rebuildTimeout = setTimeout(rebuild, next-now+500);
+} 
+rebuild();
+
+/*
 document.body.appendChild(createSoon({now:scheduleData.blocks[0],next:scheduleData.blocks[1],nextTime:1000,nowDate:new Date()}));
-document.body.appendChild(createWeekSchedule({dayTypes:[scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1]],dateStart:new Date(),dateRangeStr:"Yeet-yeet2"}))
+document.body.appendChild(createWeekSchedule({dayTypes:[scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1]],dateStart:new Date(),dateRangeStr:"Yeet-yeet2"}));
 document.body.appendChild(createDaySchedule({dayType:getDataByDay(3,0),blocks:scheduleData.blocks}));
 
 document.body.appendChild(createEditBlock(2,null,console.log,console.warn));
 document.body.appendChild(createEditDay(2,null,console.log,console.warn));
 
 document.body.appendChild(createEditSchedule(()=>console.log("leave")));
+*/

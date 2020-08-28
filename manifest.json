@@ -1,0 +1,12 @@
+{
+  "name": "School Schedule Manager",
+  "version": "1.0.0",
+  "description": "An extension to keep track of school schedules.",
+  "manifest_version": 2,
+  "icons": {
+    "128": "icon_128.png"
+  },
+  "browser_action": {
+     "default_popup": "index.html"
+  }
+}
