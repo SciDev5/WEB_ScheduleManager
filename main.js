@@ -14,46 +14,24 @@ function load() {
 
 function defaultScheduleData() {
 	return {
-		startDay: [2020,7,25],
+		startDay: [2020,8,1],
 		weekDays: [false,true,true,true,true,true,false],
-		weekTypes: [0,1],
-		holidays: [{start:[2020,7,28],length:3,name:"test lol"}],
-		dayTypeOrder: [[0,0,1,1],[0,1,2,1]],
+		weekTypes: [0],
+		holidays: [{start:[2020,11,17],length:16,name:"Winter Break"}],
+		dayTypeOrder: [[0]],
 		dayTypes: [
 			{
-				name: "A-day",
-				blocks: [0,1,0],
-				blockTimes: [7*60+30,8*60+0,9*60+30,10*60+0],
+				name: "Example Day",
+				blocks: [0],
+				blockTimes: [12*60+0,2*60+30],
 				color: "red"
-			},
-			{
-				name: "B-day",
-				blocks: [1,0,2],
-				blockTimes: [9*60+30,10*60+0,10*60+30,11*60+0],
-				color: "blue"
-			},
-			{
-				name: "Yeet",
-				blocks: [1],
-				blockTimes: [9*60+30,13*60+0],
-				color: "yellow"
 			}
 		],
 		blocks: [
 			{ 
-				name: "test class",
-				info: "A test class: **yeet**\n\n~~code!~~_`yeet2 lol`_\n\n[yeet](/)",
+				name: "Example Class",
+				info: "A test class: **using markdown**",
 				color: "orange"
-			},
-			{ 
-				name: "class test",
-				info: "**TODO**",
-				color: "pink"
-			},
-			{ 
-				name: "lunch lol",
-				info: "**TODO**",
-				color: "green"
 			}
 		]
 	}
@@ -150,6 +128,10 @@ function dateStrToArray(dstr) {
 
 function daysBetween(dateA,dateB) {
 	return Math.round(Math.abs(dateA-dateB)/86400000);
+}
+
+function signedDaysBetween(dateA,dateB) {
+	return Math.round((dateB-dateA)/86400000);
 }
 
 function today(date) {
@@ -378,7 +360,8 @@ function createWeekSchedule(weekData) {
 	for (var i = 0; i < dayTypes.length; i++) {
 		var day = dayTypes[i] || {name:"!!invalid day!!",color:"grey"};
 		var dayElt = createElement(container,"div","style-row "+day.color);
-		createElement(dayElt,"span","style-info",i==0?"Today":Math.abs(i)>=7?today(new Date(24*60*60*1000*(i+0.5)+today(dateStart).getTime())).toLocaleDateString():(["Su","M","Tu","W","Th","F","Sa"])[(7+i+today(dateStart).getDay())%7]);
+		var j = i + offset;
+		createElement(dayElt,"span","style-info",j==0?"Today":Math.abs(j)>=7?today(new Date(24*60*60*1000*(j+0.5)+today(dateStart).getTime())).toLocaleDateString():(j<0?"Last ":"")+(["Su","M","Tu","W","Th","F","Sa"])[(7+i+today(dateStart).getDay())%7]);
 		createTextElement(dayElt," ");
 		createElement(dayElt,"span","",day.name);
 	}
@@ -829,7 +812,7 @@ var editScheduleButton = document.getElementById("button-edit");
 var thingContainer = document.getElementById("gui-container");
 var screen = -1;
 
-var daysLen = 10;
+var daysLen = 10, offset = -1;
 
 showScheduleButton.addEventListener("click", () => {
 	screen = 0;
@@ -840,13 +823,14 @@ showScheduleButton.addEventListener("click", () => {
 
 	thingContainer.innerHTML = "";
 	thingContainer.appendChild(createSoon(getSoonInfo()));
-	thingContainer.appendChild(createDaySchedule({dayType:getDataByDay(daysBetween(nowDate,dateFromArray(scheduleData.startDay))),blocks:scheduleData.blocks}));
+	thingContainer.appendChild(createDaySchedule({dayType:getDataByDay(signedDaysBetween(dateFromArray(scheduleData.startDay),nowDate)),blocks:scheduleData.blocks}));
 	
-	var weekDays = [], offset = -1, dateStart = new Date(today(new Date()).getTime() - offset*24*60*60*1000), dateEnd = new Date(dateStart.getTime() + daysLen*24*60*60*1000);
+	var weekDays = [], dateStart = new Date(today(new Date()).getTime() + offset*24*60*60*1000), dateEnd = new Date(dateStart.getTime() + daysLen*24*60*60*1000);
 	for (var i = offset; i < daysLen+offset; i++) 
-		weekDays.push(getDataByDay(i+daysBetween(dateStart,dateFromArray(scheduleData.startDay))));
+		weekDays.push(getDataByDay(i+signedDaysBetween(dateFromArray(scheduleData.startDay),nowDate)));
 	thingContainer.appendChild(createWeekSchedule({dayTypes:weekDays,dateStart,dateRangeStr:(new Date(dateStart.getTime() + 12*60*60*1000).toLocaleDateString())+" - "+(new Date(dateEnd.getTime() + 12*60*60*1000).toLocaleDateString())}));
 	createElement(thingContainer,"button","style-input style-row","Show more days").addEventListener("click",()=>{daysLen += 10; rebuild()});
+	createElement(thingContainer,"button","style-input style-row","Show past days").addEventListener("click",()=>{offset -= 10; rebuild()});
 });
 
 editScheduleButton.addEventListener("click", async () => {
@@ -914,13 +898,14 @@ var rebuild = () => {
 		var nowDate = today(new Date());
 		thingContainer.innerHTML = "";
 		thingContainer.appendChild(createSoon(getSoonInfo()));
-		thingContainer.appendChild(createDaySchedule({dayType:getDataByDay(daysBetween(nowDate,dateFromArray(scheduleData.startDay))),blocks:scheduleData.blocks}));
+		thingContainer.appendChild(createDaySchedule({dayType:getDataByDay(signedDaysBetween(dateFromArray(scheduleData.startDay),nowDate)),blocks:scheduleData.blocks}));
 
-		var weekDays = [], offset = -1, dateStart = new Date(today(new Date()).getTime() - offset*24*60*60*1000), dateEnd = new Date(dateStart.getTime() + daysLen*24*60*60*1000);
+		var weekDays = [], dateStart = new Date(today(new Date()).getTime() + offset*24*60*60*1000), dateEnd = new Date(dateStart.getTime() + daysLen*24*60*60*1000);
 		for (var i = offset; i < daysLen+offset; i++) 
-			weekDays.push(getDataByDay(i+daysBetween(dateStart,dateFromArray(scheduleData.startDay))));
+			weekDays.push(getDataByDay(i+signedDaysBetween(dateFromArray(scheduleData.startDay),nowDate)));
 		thingContainer.appendChild(createWeekSchedule({dayTypes:weekDays,dateStart,dateRangeStr:(new Date(dateStart.getTime() + 12*60*60*1000).toLocaleDateString())+" - "+(new Date(dateEnd.getTime() + 12*60*60*1000).toLocaleDateString())}));
 		createElement(thingContainer,"button","style-input style-row","Show more days").addEventListener("click",()=>{daysLen += 10; rebuild()});
+		createElement(thingContainer,"button","style-input style-row","Show past days").addEventListener("click",()=>{offset -= 10; rebuild()});
 		break;
 	}
 
