@@ -16,8 +16,9 @@ function defaultScheduleData() {
 	return {
 		startDay: [2020,7,25],
 		weekDays: [false,true,true,true,true,true,false],
-		holidays: [{start:1577854800000,length:3,name:"test lol"}],
-		dayTypeOrder: [0,0,1,1],
+		weekTypes: [0,1],
+		holidays: [{start:[2020,7,28],length:3,name:"test lol"}],
+		dayTypeOrder: [[0,0,1,1],[0,1,2,1]],
 		dayTypes: [
 			{
 				name: "A-day",
@@ -30,6 +31,12 @@ function defaultScheduleData() {
 				blocks: [1,0,2],
 				blockTimes: [9*60+30,10*60+0,10*60+30,11*60+0],
 				color: "blue"
+			},
+			{
+				name: "Yeet",
+				blocks: [1],
+				blockTimes: [9*60+30,13*60+0],
+				color: "yellow"
 			}
 		],
 		blocks: [
@@ -68,6 +75,14 @@ function getHolidayDayType(holiday) {
 		blockTimes: [],
 		color: "grey"
 	}
+}
+
+function dateStrFromArray(arr) {
+	return [arr[0],("00"+(arr[1]+1).toString()).substr(-2),("00"+arr[2].toString()).substr(-2)].join("-");
+}
+function dateStrToArray(dstr) {
+	var arr = dstr.split("-");
+	return [parseInt(arr[0]),parseInt(arr[1])-1,parseInt(arr[2])];
 }
 
 function daysBetween(dateA,dateB) {
@@ -207,8 +222,8 @@ function createSelectElement(parent,className,options) {
 	return elt;
 }
 
-function getDataByDay(i) { // i is refrencing dayTypeOrder
-	var dayType = scheduleData.dayTypes[scheduleData.dayTypeOrder[i%scheduleData.dayTypeOrder.length]];
+function getDataByDay(i, j) { // i is refrencing dayTypeOrder, j is week
+	var dayType = scheduleData.dayTypes[scheduleData.dayTypeOrder[scheduleData.weekTypes[j]][i%scheduleData.dayTypeOrder.length]];
 	return dayType;
 }
 
@@ -506,13 +521,192 @@ function createEditDay(id, presets, changeListener, cancelListener) {
 		cancelListener(id);
 	});
 
+	updateSaveButton();
+
 	return container;
 }
 
 
+function createEditSchedule(leaveEvent) {
+	var container = createElement(null,"div","style-group");
+	var label = createElement(container,"div","style-label","Edit Schedule");
+
+	var basicSettings = createElement(container,"div","style-row");
+	createTextElement(basicSettings,"Start Day: ");
+	var startDayIn = createElement(basicSettings,"input","style-input"); startDayIn.type = "date"; startDayIn.value = dateStrFromArray(scheduleData.startDay);
+	
+	createElement(basicSettings, "br");
+	createElement(basicSettings, "br");
+	createTextElement(basicSettings,"Week types: ");
+	var weekTypesIn = createElement(basicSettings,"input","style-input"); weekTypesIn.value = "["+scheduleData.weekTypes.join(",")+"]";
+
+	createElement(basicSettings, "br");
+	createElement(basicSettings, "br");
+	createTextElement(basicSettings,"Day type order: ");
+	var dayTypesIn = createElement(basicSettings,"input","style-input"); dayTypesIn.value = "[["+scheduleData.dayTypeOrder.map(v=>v.join(",")).join("],[")+"]]";
+	
+	createElement(basicSettings, "br");
+	createElement(basicSettings, "br");
+	var saveButton = createElement(basicSettings,"button","style-input style-button-disabled","save");
+	var cancelButton = createElement(basicSettings,"button","style-input","cancel");
+	var saveButtonError = createElement(basicSettings,"div","style-inline-textblock red","Error: ");
+	var saveButtonErrorText = createElement(saveButtonError,"span","","");
+
+	var blocksContainer = createElement(container,"div","style-row");
+	createElement(blocksContainer,"div","style-label","Holidays");
+	var addBlockButton = createElement(blocksContainer,"button","style-row style-input","Add Holiday");
+
+	var invalidityReason = "";
+	var valid = () => {
+		var invalidate = reason => {
+			invalidityReason = reason;
+		}
+		
+		if (startDayIn.value.length == 0) { invalidate("Start date invalid!"); return false; }
+
+		try {
+			var value = JSON.parse(weekTypesIn.value);
+		} catch (e) { invalidate("Week types is invalid!"); return false; }
+		if (!(value instanceof Array) || !value.every(v=>typeof v == "number"))
+			{ invalidate("Week types is invalid!"); return false; }
+
+		try {
+			var value = JSON.parse(dayTypesIn.value);
+		} catch (e) { invalidate("Day types is invalid!"); return false; }
+		if (!(value instanceof Array) || !value.every(v=>(v instanceof Array) && v.every(v=>typeof v == "number")))
+			{ invalidate("Day types is invalid!"); return false; }
+
+		var time = -1;
+		for (var data of blockDatas) {
+			if (data.name.length == 0) { invalidate("A holiday's name is empty!"); return false; }
+			if (data.start.length == 0) { invalidate("A holiday's start date is not set!"); return false; }
+			if (isNaN(parseInt(data.length)) || parseInt(data.length) <= 0) { invalidate("The length of a holiday is not valid!"); return false; }
+		}
+
+		return true;
+	}
+	var updateSaveButton = () => {
+		saveButton.classList.remove("style-button-disabled");
+		if (!valid()) {
+			saveButtonError.style.display = "inline-block";
+			saveButtonErrorText.innerText = invalidityReason;
+			saveButton.classList.add("style-button-disabled");
+		} else {
+			saveButtonError.style.display = "none";
+		}
+	}
+	var blockDatas = [];
+	var addBlock = (blockValues) => {
+		var row = createElement(null,"div","style-row");
+
+		var nameIn = createElement(row,"input","style-input"); nameIn.value = blockValues.name;
+		var startIn = createElement(row,"input","style-input"); startIn.type = "date"; startIn.value = dateStrFromArray(blockValues.start);
+		var lengthIn = createElement(row,"input","style-input"); lengthIn.type = "number"; lengthIn.min = 1; lengthIn.value = blockValues.length;
+
+		var removeBlockButton = createElement(row,"button","style-input","Remove");
+
+		blocksContainer.insertBefore(row,addBlockButton);
+		
+		var data = {name: nameIn.value, start: startIn.value, length: lengthIn.value};
+		blockDatas.push(data);
+
+		nameIn.addEventListener("keydown",() => setTimeout(()=>{
+			data.name = nameIn.value;
+		}));
+		nameIn.addEventListener("change",() => {
+			data.name = nameIn.value;
+			updateSaveButton();
+		});
+		startIn.addEventListener("change",() => {
+			if (startIn.value.length == 0) {
+				startIn.value = data.start;
+			} else {
+				data.start = startIn.value;
+				updateSaveButton();
+			}
+		});
+		lengthIn.addEventListener("change",() => {
+			var length = parseInt(lengthIn.value);
+			if (isNaN(length) || length <= 0) {
+				lengthIn.value = data.length;
+			} else {
+				data.length = lengthIn.value;
+				updateSaveButton();
+			}
+		});
+
+		removeBlockButton.addEventListener("click",() => {
+			blockDatas.splice(blockDatas.indexOf(data),1);
+			row.remove();
+			updateSaveButton();
+		});
+		
+	}
+
+	for (var i = 0; i < scheduleData.holidays.length; i++) {
+		addBlock(scheduleData.holidays[i]);
+	}
+
+	addBlockButton.addEventListener("click",() => {
+		addBlock({name:"holiday",start:[2020,0,1],length:2});
+		updateSaveButton();
+	});
+	startDayIn.addEventListener("change",() => {
+		if (startDayIn.value.length > 0)
+			scheduleData.startDay = dateStrToArray(startDayIn.value);
+		else
+			startDayIn.value = dateStrFromArray(scheduleData.startDay);	
+		updateSaveButton();
+	});
+	weekTypesIn.addEventListener("change",() => {
+		try {
+			var value = JSON.parse(weekTypesIn.value);
+		} catch (e) {
+			weekTypesIn.value = JSON.stringify(scheduleData.weekTypes);
+		}
+		if ((value instanceof Array) && value.every(v=>typeof v == "number"))
+			scheduleData.weekTypes = value;
+		else
+			weekTypesIn.value = JSON.stringify(scheduleData.weekTypes);	
+		updateSaveButton();
+	});
+	dayTypesIn.addEventListener("change",() => {
+		try {
+			var value = JSON.parse(dayTypesIn.value);
+		} catch (e) {
+			dayTypesIn.value = JSON.stringify(scheduleData.dayTypeOrder);
+		}
+		if ((value instanceof Array) && value.every(v=>(v instanceof Array) && v.every(v=>typeof v == "number")))
+			scheduleData.dayTypeOrder = value;
+		else
+			dayTypesIn.value = JSON.stringify(scheduleData.dayTypeOrder);	
+		updateSaveButton();
+	});
+	
+	saveButton.addEventListener("click",() => {
+		if (valid()) {
+			scheduleData.holidays = [];
+			for (var data of blockDatas)
+				scheduleData.holidays.push({name:data.name,start:dateStrToArray(data.start),length:parseInt(data.length)});
+			save();
+			leaveEvent();
+		}
+	});
+	cancelButton.addEventListener("click",() => {
+		load();
+		leaveEvent();
+	});
+
+	updateSaveButton();
+
+	return container;
+}
+
 document.body.appendChild(createSoon({now:scheduleData.blocks[0],next:scheduleData.blocks[1],nextTime:1000,nowDate:new Date()}));
 document.body.appendChild(createWeekSchedule({dayTypes:[scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1],scheduleData.dayTypes[0],scheduleData.dayTypes[1]],dateStart:new Date(),dateRangeStr:"Yeet-yeet2"}))
-document.body.appendChild(createDaySchedule({dayType:getDataByDay(3),blocks:scheduleData.blocks}));
+document.body.appendChild(createDaySchedule({dayType:getDataByDay(3,0),blocks:scheduleData.blocks}));
 
 document.body.appendChild(createEditBlock(2,null,console.log,console.warn));
 document.body.appendChild(createEditDay(2,null,console.log,console.warn));
+
+document.body.appendChild(createEditSchedule(()=>console.log("leave")));
