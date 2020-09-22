@@ -311,7 +311,7 @@ function getDataByDay(i_) { // i_ is days since start
 
 
 	if (scheduleData.weekDays[k])
-		return scheduleData.dayTypes[scheduleData.dayTypeOrder[scheduleData.weekTypes[j]][i%scheduleData.dayTypeOrder[scheduleData.weekTypes[j]].length]];
+		return scheduleData.dayTypes[scheduleData.dayTypeOrder[scheduleData.weekTypes[j]][i%scheduleData.dayTypeOrder[scheduleData.weekTypes[j]].length]] || {name:"!!invalid!!",color:"grey",blocks:[],blockTimes:[0]};
 	else 
 		return getWeekendDayType();
 }
@@ -361,7 +361,7 @@ function createWeekSchedule(weekData) {
 		var day = dayTypes[i] || {name:"!!invalid day!!",color:"grey"};
 		var dayElt = createElement(container,"div","style-row "+day.color);
 		var j = i + offset;
-		createElement(dayElt,"span","style-info",j==0?"Today":Math.abs(j)>=7?today(new Date(24*60*60*1000*(j+0.5)+today(dateStart).getTime())).toLocaleDateString():(j<0?"Last ":"")+(["Su","M","Tu","W","Th","F","Sa"])[(7+i+today(dateStart).getDay())%7]);
+		createElement(dayElt,"span","style-info",j==0?"Today":Math.abs(j)>=7?today(new Date(24*60*60*1000*(j+1.5)+today(dateStart).getTime())).toLocaleDateString():(j<0?"Last ":"")+(["Su","M","Tu","W","Th","F","Sa"])[(7+i+today(dateStart).getDay())%7]);
 		createTextElement(dayElt," ");
 		createElement(dayElt,"span","",day.name);
 	}
